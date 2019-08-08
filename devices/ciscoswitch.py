@@ -1,21 +1,16 @@
 from lib.switchstate import SwitchState
-import logging
+from lib.config import config
 import telnetlib
 import re
 import socket
 import time
 from io import StringIO
+import devices.device
 
 
-class CiscoSwitch:
-    def __init__(self, config, identifier, address):
-        self.config = config
-        self.identifier = identifier
-        self.address = address
-        self.state = SwitchState.INIT
-        self._logger = logging.getLogger('[{}]'.format(identifier))
-        self.device_type = 'UNKNOWN'
-        self._logger.info('new switch')
+class CiscoSwitch(devices.device.Device):
+    def __init__(self):
+        super().__init__()
 
     def pull_init_info(self):
         retry_max = 10
@@ -23,8 +18,8 @@ class CiscoSwitch:
             try:
                 tc = telnetlib.Telnet(self.address, timeout=3)
                 self._write(tc, None, [b'\r\n[Uu]sername: '])
-                self._write(tc, self.config.get('liscain', 'liscain_init_username'), [b'\r\n[Pp]assword: '])
-                self._write(tc, self.config.get('liscain', 'liscain_init_password'))
+                self._write(tc, config.get('liscain', 'liscain_init_username'), [b'\r\n[Pp]assword: '])
+                self._write(tc, config.get('liscain', 'liscain_init_password'))
                 self._logger.info('authenticated')
                 self._read_pid(tc)
                 self._logger.info('generating ssh keys...')
@@ -34,7 +29,7 @@ class CiscoSwitch:
                 self._write(tc, 'end')
                 self._write(tc, 'exit')
                 self._logger.info('logged out')
-                self.state = SwitchState.READY
+                self.change_state(SwitchState.READY)
                 self._logger.info('successfully initialized switch, state now %s', self.state)
                 return
             except socket.timeout:
@@ -43,7 +38,7 @@ class CiscoSwitch:
             except EOFError:
                 self._logger.info('switch not ready, wait 10s (retry %i/%i)', retry, retry_max)
                 time.sleep(10)
-        self.state = SwitchState.INIT_TIMEOUT
+        self.change_state(SwitchState.INIT_TIMEOUT)
         self._logger.error('failed to fetch information from switch')
 
     def _write(self, telnet_client, data, expect=None, timeout=None):
@@ -64,13 +59,14 @@ class CiscoSwitch:
         if data is not None:
             self.device_type = data.group(1)
             self._logger.info('type detected as %s', self.device_type)
+            self.save()
 
     def emit_base_config(self):
         with open('baseconfig/cisco.cfg') as fp:
             conf = fp.read().format(
                 liscain_hostname=self.identifier,
-                liscain_adopt_dn=self.config.get('liscain', 'liscain_adopt_dn'),
-                liscain_init_username=self.config.get('liscain', 'liscain_init_username'),
-                liscain_init_password=self.config.get('liscain', 'liscain_init_password'),
+                liscain_adopt_dn=config.get('liscain', 'liscain_adopt_dn'),
+                liscain_init_username=config.get('liscain', 'liscain_init_username'),
+                liscain_init_password=config.get('liscain', 'liscain_init_password'),
             )
             return StringIO(conf)

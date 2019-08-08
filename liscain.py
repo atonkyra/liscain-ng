@@ -3,10 +3,13 @@ import logging
 import ipaddress
 import threading
 import time
-from lib.switchstate import SwitchState
+import lib.db
+import sqlalchemy.orm
+from sqlalchemy import and_
 from devices.ciscoswitch import CiscoSwitch
 from io import StringIO
-import configparser
+from lib.config import config
+from lib.switchstate import SwitchState
 
 
 logging.basicConfig(
@@ -20,22 +23,32 @@ logging.getLogger('tftpy.TftpPacketTypes').setLevel(logging.CRITICAL)
 logging.getLogger('tftpy.TftpStates').setLevel(logging.CRITICAL)
 
 
-config = configparser.ConfigParser()
-with open('config.ini') as fp:
-    config.read_file(fp)
-
-
-confdb = {}
-
-
 def serve_file(name, **kwargs):
     remote_address = kwargs['raddress']
     remote_id = 'lc-{:02x}'.format(int(ipaddress.ip_address(remote_address)))
     if name in ['network-confg']:
-        if remote_id not in confdb or confdb[remote_id].state == SwitchState.INIT_TIMEOUT:
-            confdb[remote_id] = CiscoSwitch(config, remote_id, remote_address)
-            threading.Thread(target=confdb[remote_id].pull_init_info, daemon=True).start()
-        return confdb[remote_id].emit_base_config()
+        device = None
+        with lib.db.sql_ses() as ses:
+            try:
+                device = ses.query(CiscoSwitch).filter(
+                    and_(
+                        CiscoSwitch.identifier == remote_id,
+                        CiscoSwitch.state != SwitchState.CONFIGURED
+                    )
+                ).one()
+            except sqlalchemy.orm.exc.NoResultFound:
+                device = CiscoSwitch()
+                device.initialize(identifier=remote_id, address=remote_address)
+                ses.add(device)
+                ses.commit()
+                ses.refresh(device)
+        if device.state == SwitchState.INIT or device.state == SwitchState.INIT_TIMEOUT:
+            device.change_state(SwitchState.INIT_IN_PROGRESS)
+            threading.Thread(target=device.pull_init_info, daemon=True).start()
+            return device.emit_base_config()
+        else:
+            logger.info('%s requests config, but is in state %s, ignoring request', remote_id, -device.state)
+        return StringIO()
     else:
         logger.debug('%s requested %s, ignoring', remote_id, name)
     return StringIO()
@@ -47,11 +60,13 @@ def tftp_server():
 
 
 def main():
+    lib.db.initialize(config.get('liscain', 'database'))
     tftp_task = threading.Thread(target=tftp_server, daemon=True)
     tftp_task.start()
     while True:
-        for switch in confdb.values():
-            logger.info('switch %s (%s): state = %s', switch.identifier, switch.device_type, switch.state)
+        #for switch in confdb.values():
+        #    logger.info('switch %s (%s): state = %s', switch.identifier, switch.device_type, switch.state)
+        pass
         time.sleep(10)
 
 
