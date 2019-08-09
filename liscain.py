@@ -45,13 +45,13 @@ def serve_file(name, **kwargs):
                 ses.add(device)
                 ses.commit()
                 ses.refresh(device)
-        if device.state in [SwitchState.INIT, SwitchState.INIT_IN_PROGRESS, SwitchState.INIT_TIMEOUT]:
+        if device.state in [SwitchState.INIT, SwitchState.INIT_IN_PROGRESS, SwitchState.INIT_TIMEOUT, SwitchState.READY]:
             if device.state != SwitchState.INIT_IN_PROGRESS:
                 device.change_state(SwitchState.INIT_IN_PROGRESS)
                 threading.Thread(target=device.pull_init_info, daemon=True).start()
             return device.emit_base_config()
         else:
-            logger.info('%s requests config, but is in state %s, ignoring request', remote_id, device.state)
+            logger.info('%s requests config, but is in state %s', remote_id, device.state)
         return StringIO()
     else:
         logger.debug('%s requested %s, ignoring', remote_id, name)
