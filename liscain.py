@@ -6,10 +6,13 @@ import time
 import lib.db
 import sqlalchemy.orm
 from sqlalchemy import and_
+from devices import remap_to_subclass
+from devices.device import Device
 from devices.ciscoswitch import CiscoSwitch
 from io import StringIO
 from lib.config import config
 from lib.switchstate import SwitchState
+import zmq
 
 
 logging.basicConfig(
@@ -60,15 +63,63 @@ def tftp_server():
     srv.listen()
 
 
+def handle_msg(message):
+    cmd = message.get('cmd', None)
+    if cmd == 'list':
+        ret = []
+        with lib.db.sql_ses() as ses:
+            devices = ses.query(Device).all()
+            for device in devices:
+                ret.append(device.as_dict())
+        return ret
+
+    elif cmd == 'status':
+        device_id = message.get('id', None)
+        if device_id is None:
+            return {'error': 'missing device id'}
+        with lib.db.sql_ses() as ses:
+            try:
+                device = ses.query(Device).filter(Device.id == device_id).one()
+                return device.as_dict()
+            except sqlalchemy.orm.exc.NoResultFound:
+                return {'error': 'device not found'}
+
+    elif cmd == 'adopt':
+        device_id = message.get('id', None)
+        switch_config = message.get('config', None)
+        identity = message.get('identity', None)
+        if device_id is None:
+            return {'error': 'missing device id'}
+        if config is None:
+            return {'error': 'missing config'}
+        if identity is None:
+            return {'error': 'missing identity'}
+        device = None
+        with lib.db.sql_ses() as ses:
+            try:
+                device = ses.query(Device).filter(Device.id == device_id).one()
+            except sqlalchemy.orm.exc.NoResultFound:
+                return {'error': 'device not found'}
+        remap_to_subclass(device)
+        device.change_state(SwitchState.CONFIGURING)
+        if not device.change_identity(identity):
+            device.change_state(SwitchState.CONFIGURE_FAILED)
+            return {'error': 'failed to change identity, failing configuration step'}
+        threading.Thread(target=device.configure, daemon=True, args=(switch_config,)).start()
+        return device.as_dict()
+    return {'error': 'unknown command'}
+
+
 def main():
     lib.db.initialize(config.get('liscain', 'database'))
     tftp_task = threading.Thread(target=tftp_server, daemon=True)
     tftp_task.start()
+    zmq_context = zmq.Context()
+    zmq_sock = zmq_context.socket(zmq.REP)
+    zmq_sock.bind('tcp://127.0.0.1:1337')
     while True:
-        #for switch in confdb.values():
-        #    logger.info('switch %s (%s): state = %s', switch.identifier, switch.device_type, switch.state)
-        pass
-        time.sleep(10)
+        msg = zmq_sock.recv_json()
+        zmq_sock.send_json(handle_msg(msg))
 
 
 if __name__ == '__main__':

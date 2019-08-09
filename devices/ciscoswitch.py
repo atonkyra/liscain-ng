@@ -11,6 +11,7 @@ import devices.device
 class CiscoSwitch(devices.device.Device):
     def __init__(self):
         super().__init__()
+        self.device_class = 'CiscoIOS'
 
     def pull_init_info(self):
         retry_max = 10
@@ -20,7 +21,7 @@ class CiscoSwitch(devices.device.Device):
                 self._write(tc, None, [b'\r\n[Uu]sername: '])
                 self._write(tc, config.get('liscain', 'liscain_init_username'), [b'\r\n[Pp]assword: '])
                 self._write(tc, config.get('liscain', 'liscain_init_password'))
-                self._logger.info('authenticated')
+                self._logger.info('logged in')
                 self._write(tc, 'terminal length 0')
                 self._read_mac(tc)
                 self._read_pid(tc)
@@ -43,9 +44,59 @@ class CiscoSwitch(devices.device.Device):
         self.change_state(SwitchState.INIT_TIMEOUT)
         self._logger.error('failed to fetch information from switch')
 
-    def _write(self, telnet_client, data, expect=None, timeout=None):
+    def configure(self, switch_config):
+        time.sleep(10)
+        try:
+            tc = telnetlib.Telnet(self.address, timeout=3)
+            self._write(tc, None, [b'\r\n[Uu]sername: '])
+            self._write(tc, config.get('liscain', 'liscain_init_username'), [b'\r\n[Pp]assword: '])
+            self._write(tc, config.get('liscain', 'liscain_init_password'))
+            self._logger.info('[configure] logged in')
+            self._write(tc, 'terminal length 0')
+            self._write(tc, 'tclsh')
+            tclsh_exp = [b'\\+>']
+            self._write(tc, 'puts [open "flash:liscain.config.in" w+] {', tclsh_exp, newline='\r')
+            for config_line in switch_config.split('\n'):
+                config_line = config_line.strip()
+                self._write(tc, config_line, tclsh_exp, newline='\r')
+            self._write(tc, '}')
+            self._write(tc, 'exit')
+            self._write(tc, 'copy flash:liscain.config.in startup-config', [b'\r\n'])
+            self._write(tc, 'startup-config')
+            self._write(tc, 'exit')
+            self._logger.info('[configure] logged out')
+            self.change_state(SwitchState.CONFIGURED)
+        except socket.timeout:
+            self._logger.info('[configure] timed out')
+        except EOFError:
+            pass
+
+    def change_identity(self, identity):
+        old_identity = self.identifier
+        try:
+            tc = telnetlib.Telnet(self.address, timeout=3)
+            self._write(tc, None, [b'\r\n[Uu]sername: '])
+            self._write(tc, config.get('liscain', 'liscain_init_username'), [b'\r\n[Pp]assword: '])
+            self._write(tc, config.get('liscain', 'liscain_init_password'))
+            self._logger.info('[change_identity] logged in')
+            self._write(tc, 'terminal length 0')
+            self._write(tc, 'configure terminal')
+            self.identifier = identity
+            self._write(tc, 'hostname {}'.format(identity))
+            self._write(tc, 'end')
+            self._write(tc, 'exit')
+            self._logger.info('[change_identity] logged out')
+            return super().change_identity(identity)
+        except socket.timeout:
+            self.identifier = old_identity
+            return False
+        except EOFError:
+            self.identifier = old_identity
+            return False
+
+    def _write(self, telnet_client, data, expect=None, timeout=None, newline='\n'):
         if data is not None:
-            telnet_client.write('{}\n'.format(data).encode('ascii'))
+            telnet_client.write('{}{}'.format(data, newline).encode('ascii'))
         if expect is not None:
             _, match, data = telnet_client.expect(expect, timeout=timeout)
             return data.decode('ascii')
@@ -58,9 +109,7 @@ class CiscoSwitch(devices.device.Device):
 
     def _read_mac(self, telnet_client):
         # Hardware is EtherSVI, address is 04fe.7f07.9040 (bia 04fe.7f07.9040)
-        self._logger.info('a')
         data = re.search(r'EtherSVI, address is ([0-9a-f.]+)', self._write(telnet_client, 'show interface vlan1'))
-        self._logger.info('b')
         if data is not None:
             mac = data.group(1)
             mac = mac.replace('.', '')
