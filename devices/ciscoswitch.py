@@ -32,6 +32,7 @@ class CiscoSwitch(devices.device.Device):
                 self._write(tc, 'sdm prefer dual-ipv4-and-ipv6 default', timeout=10)
                 self._write(tc, 'sdm prefer dual-ipv4-and-ipv6 vlan', timeout=10)
                 self._write(tc, 'end')
+                self._write(tc, 'write')
                 self._write(tc, 'exit')
                 self._logger.info('logged out')
                 self.change_state(SwitchState.READY)

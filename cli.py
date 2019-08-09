@@ -6,6 +6,7 @@ import time
 
 parser = argparse.ArgumentParser(description='liscain-cli')
 parser.add_argument('-a', '--adopt-by-id', required=False, help='adopt a switch by id', type=int, default=None)
+parser.add_argument('-m', '--adopt-by-mac', required=False, help='adopt a switch by (partial) mac', default=None)
 parser.add_argument('-i', '--identity', required=False, help='identity of switch', default=None)
 parser.add_argument('-l', '--list', required=False, help='list switches', default=False, action='store_true')
 parser.add_argument('--adopt-nowait', required=False, help='dont wait for adoption result', default=False, action='store_true')
@@ -29,6 +30,12 @@ def list_devices(zmq_sock):
     zmq_sock.send_json({'cmd': 'list'})
     device_list = zmq_sock.recv_json()
     show_devices(device_list)
+
+
+def get_devices(zmq_sock):
+    zmq_sock.send_json({'cmd': 'list'})
+    device_list = zmq_sock.recv_json()
+    return device_list
 
 
 def adopt_device(zmq_sock, device_id, identity, config_filename):
@@ -62,7 +69,25 @@ def main():
         if args.identity is None:
             print('identity is required when adopting')
             return
-        adopt_device(zmq_sock, 1, args.identity, 'config/{}.cfg'.format(args.identity))
+        adopt_device(zmq_sock, args.adopt_by_id, args.identity, 'config/{}.cfg'.format(args.identity))
+    if args.adopt_by_mac is not None:
+        if args.identity is None:
+            print('identity is required when adopting')
+            return
+        devices = get_devices(zmq_sock)
+        mac_matches = []
+        simplemac = args.adopt_by_mac.replace(':', '')
+        for device in devices:
+            if device['state'] not in ['READY', 'CONFIGURE_FAILED']:
+                continue
+            if simplemac in device['mac_address'].replace(':', ''):
+                mac_matches.append(device['id'])
+        if len(mac_matches) == 1:
+            adopt_device(zmq_sock, mac_matches[0], args.identity, 'config/{}.cfg'.format(args.identity))
+        elif len(mac_matches) > 1:
+            print('error: multiple mac_address matches')
+        else:
+            print('error: no mac_address matches')
 
 
 if __name__ == '__main__':

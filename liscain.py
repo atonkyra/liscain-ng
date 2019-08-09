@@ -100,6 +100,8 @@ def handle_msg(message):
                 device = ses.query(Device).filter(Device.id == device_id).one()
             except sqlalchemy.orm.exc.NoResultFound:
                 return {'error': 'device not found'}
+        if device.state not in [SwitchState.CONFIGURE_FAILED, SwitchState.READY]:
+            return {'error': 'switch not in READY or CONFIGURE_FAILED state'}
         remap_to_subclass(device)
         device.change_state(SwitchState.CONFIGURING)
         if not device.change_identity(identity):
