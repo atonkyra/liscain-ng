@@ -11,6 +11,7 @@ class Device(lib.db.base):
     address = Column(String, nullable=False, default=None)
     state = Column(Enum(lib.switchstate.SwitchState), nullable=False, default=None)
     device_type = Column(String, nullable=False, default='UNKNOWN')
+    mac_address = Column(String, nullable=False, default='UNKNOWN')
 
     def __init__(self):
         super().__init__()
@@ -23,6 +24,7 @@ class Device(lib.db.base):
         self.address = address
         self.state = lib.switchstate.SwitchState.INIT
         self.device_type = 'UNKNOWN'
+        self.mac_address = 'UNKNOWN'
 
     @orm.reconstructor
     def reconstruct(self):

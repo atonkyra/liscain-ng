@@ -21,6 +21,8 @@ class CiscoSwitch(devices.device.Device):
                 self._write(tc, config.get('liscain', 'liscain_init_username'), [b'\r\n[Pp]assword: '])
                 self._write(tc, config.get('liscain', 'liscain_init_password'))
                 self._logger.info('authenticated')
+                self._write(tc, 'terminal length 0')
+                self._read_mac(tc)
                 self._read_pid(tc)
                 self._logger.info('generating ssh keys...')
                 self._write(tc, 'configure terminal')
@@ -53,6 +55,21 @@ class CiscoSwitch(devices.device.Device):
                 timeout=timeout
             )
             return data.decode('ascii')
+
+    def _read_mac(self, telnet_client):
+        # Hardware is EtherSVI, address is 04fe.7f07.9040 (bia 04fe.7f07.9040)
+        self._logger.info('a')
+        data = re.search(r'EtherSVI, address is ([0-9a-f.]+)', self._write(telnet_client, 'show interface vlan1'))
+        self._logger.info('b')
+        if data is not None:
+            mac = data.group(1)
+            mac = mac.replace('.', '')
+            mac_list = []
+            for mac_byte in range(0, 6):
+                mac_list.append('{}{}'.format(mac[mac_byte * 2], mac[mac_byte * 2 + 1]))
+            self.mac_address = ':'.join(mac_list)
+            self._logger.info('mac address detected as %s', self.mac_address)
+        pass
 
     def _read_pid(self, telnet_client):
         data = re.search(r'PID: ([a-zA-Z0-9-]+)', self._write(telnet_client, 'show inventory'))
