@@ -65,10 +65,12 @@ class CiscoSwitch(devices.device.Device):
             self._write(tc, 'copy flash:liscain.config.in startup-config', [b'\r\n'])
             self._write(tc, 'startup-config')
             try:
-                prompt = self._write(tc, 'reload', [b'\r\n'])
+                prompt = self._write(tc, 'reload', [b'yes/no', b'confirm'])
                 if 'yes/no' in prompt:
-                    self._write(tc, 'no', [b'\r\n'])
-                self._write(tc, 'confirm')
+                    time.sleep(1)
+                    self._write(tc, 'no', [b'confirm'])
+                time.sleep(1)
+                self._write(tc, '')
             except socket.timeout:
                 pass
             self._logger.info('[configure] completed')
