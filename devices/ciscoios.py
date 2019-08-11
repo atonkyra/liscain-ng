@@ -13,6 +13,32 @@ class CiscoIOS(devices.device.Device):
         super().__init__()
         self.device_class = 'CiscoIOS'
 
+    def neighbor_info(self):
+        try:
+            tc = telnetlib.Telnet(self.address, timeout=3)
+            self._write(tc, None, [b'\r\n[Uu]sername: '])
+            self._write(tc, config.get('liscain', 'liscain_init_username'), [b'\r\n[Pp]assword: '])
+            self._write(tc, config.get('liscain', 'liscain_init_password'))
+            self._write(tc, 'terminal length 0')
+            nbr_info = ['cdp']
+            neigh_info_started = False
+            for line in self._write(tc, 'show cdp neigh').split('\n')[:-1]:
+                line = line.strip()
+                if 'Device ID' in line:
+                    neigh_info_started = True
+                if neigh_info_started:
+                    nbr_info.append(line)
+
+            return '\n'.join(nbr_info)
+
+        except socket.timeout:
+            self._logger.info('timeout getting neighbor info')
+            return 'unknown'
+
+        except EOFError:
+            self._logger.info('switch not ready while getting neighbor info')
+            return 'unknown'
+
     def initial_setup(self):
         retry_max = 10
         for retry in range(1, retry_max+1):
@@ -21,7 +47,7 @@ class CiscoIOS(devices.device.Device):
                 self._write(tc, None, [b'\r\n[Uu]sername: '])
                 self._write(tc, config.get('liscain', 'liscain_init_username'), [b'\r\n[Pp]assword: '])
                 self._write(tc, config.get('liscain', 'liscain_init_password'))
-                self._logger.info('logged in')
+                self._logger.debug('logged in')
                 self._write(tc, 'terminal length 0')
                 self._read_mac(tc)
                 self._read_pid(tc)
@@ -33,7 +59,7 @@ class CiscoIOS(devices.device.Device):
                 self._write(tc, 'sdm prefer dual-ipv4-and-ipv6 vlan', timeout=10)
                 self._write(tc, 'end')
                 self._write(tc, 'exit')
-                self._logger.info('logged out')
+                self._logger.debug('logged out')
                 self.change_state(SwitchState.READY)
                 self._logger.info('successfully initialized switch, state now %s', self.state)
                 return

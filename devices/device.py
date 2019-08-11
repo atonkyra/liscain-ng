@@ -33,6 +33,10 @@ class Device(lib.db.base):
         self._logger = logging.getLogger('[{}]'.format(self.identifier))
         self._logger.debug('load switch from database')
 
+    def neighbor_info(self):
+        self._logger.error('called default neighbor info, this is not implemented')
+        return 'unknown'
+
     def change_state(self, state):
         self._logger.info('change state %s -> %s', self.state, state)
         self.state = state

@@ -73,6 +73,18 @@ def handle_msg(message, option82_controller):
                 ret.append(device.as_dict())
         return ret
 
+    elif cmd == 'neighbor-info':
+        device_id = message.get('id', None)
+        if device_id is None:
+            return {'error': 'missing device id'}
+        with lib.db.sql_ses() as ses:
+            try:
+                device = ses.query(Device).filter(Device.id == device_id).one()
+                remap_to_subclass(device)
+                return {'info': device.neighbor_info()}
+            except sqlalchemy.orm.exc.NoResultFound:
+                return {'error': 'device not found'}
+
     elif cmd == 'delete':
         device_id = message.get('id', None)
         if device_id is None:

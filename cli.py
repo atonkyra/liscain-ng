@@ -12,11 +12,13 @@ init_args, inner_args = init_parser.parse_known_args()
 
 parser = argparse.ArgumentParser(description='liscain-cli')
 if init_args.mode == 'device':
+    parser.add_argument('-n', '--neighbor-info-by-id', required=False, help='show switch neighbor info by id', type=int, default=None)
     parser.add_argument('-a', '--adopt-by-id', required=False, help='adopt a switch by id', type=int, default=None)
     parser.add_argument('-m', '--adopt-by-mac', required=False, help='adopt a switch by (partial) mac', default=None)
     parser.add_argument('-i', '--identity', required=False, help='identity of switch', default=None)
     parser.add_argument('-l', '--list', required=False, help='list switches', default=False, action='store_true')
     parser.add_argument('-d', '--delete-by-id', required=False, help='delete switch by id', default=None, type=int)
+    parser.add_argument('-f', '--filter-list', required=False, help='filter list to states (can be repeated)', default=None, action='append')
     parser.add_argument('--adopt-nowait', required=False, help='dont wait for adoption result', default=False, action='store_true')
 elif init_args.mode == 'opt82':
     parser.add_argument('-l', '--list', required=False, help='list option82 info', default=False, action='store_true')
@@ -38,6 +40,9 @@ def show_devices(device_listing):
         row = []
         for col in table.column_headers:
             row.append(device[col])
+        if args.filter_list is not None:
+            if device['state'] not in args.filter_list:
+                continue
         table.append_row(row)
     print(table)
 
@@ -52,6 +57,15 @@ def get_devices(zmq_sock):
     zmq_sock.send_json({'cmd': 'list'})
     device_list = zmq_sock.recv_json()
     return device_list
+
+
+def get_neigh_info(zmq_sock, device_id):
+    zmq_sock.send_json({'cmd': 'neighbor-info', 'id': device_id})
+    result = zmq_sock.recv_json()
+    if 'error' in result:
+        print(result['error'])
+    else:
+        print(result['info'])
 
 
 def adopt_device(zmq_sock, device_id, identity, config_filename):
@@ -147,6 +161,8 @@ def main():
     if init_args.mode == 'device':
         if args.list:
             list_devices(zmq_sock)
+        if args.neighbor_info_by_id is not None:
+            get_neigh_info(zmq_sock, args.neighbor_info_by_id)
         if args.delete_by_id is not None:
             delete_device(zmq_sock, args.delete_by_id)
         if args.adopt_by_id is not None:
