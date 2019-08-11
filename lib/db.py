@@ -29,3 +29,5 @@ def sql_ses():
         logger.error('exception during sql-session (%s), rolling back uncommitted data', be)
         logger.exception(be)
     session.remove()
+
+

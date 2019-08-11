@@ -41,6 +41,8 @@ class Device(lib.db.base):
     def change_identity(self, identity):
         self.identifier = identity
         self.save()
+        self._logger.info('changed identity -> %s', self.identifier)
+        self._logger = logging.getLogger('[{}]'.format(self.identifier))
         return True
 
     def configure(self, _config):

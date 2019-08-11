@@ -8,12 +8,12 @@ from io import StringIO
 import devices.device
 
 
-class CiscoSwitch(devices.device.Device):
+class CiscoIOS(devices.device.Device):
     def __init__(self):
         super().__init__()
         self.device_class = 'CiscoIOS'
 
-    def pull_init_info(self):
+    def initial_setup(self):
         retry_max = 10
         for retry in range(1, retry_max+1):
             try:
@@ -52,7 +52,7 @@ class CiscoSwitch(devices.device.Device):
             self._write(tc, None, [b'\r\n[Uu]sername: '])
             self._write(tc, config.get('liscain', 'liscain_init_username'), [b'\r\n[Pp]assword: '])
             self._write(tc, config.get('liscain', 'liscain_init_password'))
-            self._logger.info('[configure] logged in, begin configure')
+            self._logger.debug('[configure] logged in, begin configure')
             self._write(tc, 'terminal length 0')
             self._write(tc, 'tclsh')
             tclsh_exp = [b'\\+>']
@@ -74,10 +74,10 @@ class CiscoSwitch(devices.device.Device):
                 self._write(tc, '')
             except socket.timeout:
                 pass
-            self._logger.info('[configure] completed')
+            self._logger.debug('[configure] completed')
             self.change_state(SwitchState.CONFIGURED)
         except socket.timeout:
-            self._logger.info('[configure] timed out')
+            self._logger.error('[configure] timed out')
         except EOFError:
             pass
 
@@ -88,14 +88,14 @@ class CiscoSwitch(devices.device.Device):
             self._write(tc, None, [b'\r\n[Uu]sername: '])
             self._write(tc, config.get('liscain', 'liscain_init_username'), [b'\r\n[Pp]assword: '])
             self._write(tc, config.get('liscain', 'liscain_init_password'))
-            self._logger.info('[change_identity] logged in')
+            self._logger.debug('[change_identity] logged in')
             self._write(tc, 'terminal length 0')
             self._write(tc, 'configure terminal')
             self.identifier = identity
             self._write(tc, 'hostname {}'.format(identity))
             self._write(tc, 'end')
             self._write(tc, 'exit')
-            self._logger.info('[change_identity] logged out')
+            self._logger.debug('[change_identity] logged out')
             return super().change_identity(identity)
         except socket.timeout:
             self.identifier = old_identity
@@ -118,7 +118,6 @@ class CiscoSwitch(devices.device.Device):
             return data.decode('ascii')
 
     def _read_mac(self, telnet_client):
-        # Hardware is EtherSVI, address is 04fe.7f07.9040 (bia 04fe.7f07.9040)
         data = re.search(r'EtherSVI, address is ([0-9a-f.]+)', self._write(telnet_client, 'show interface vlan1'))
         if data is not None:
             mac = data.group(1)
@@ -126,7 +125,7 @@ class CiscoSwitch(devices.device.Device):
             mac_list = []
             for mac_byte in range(0, 6):
                 mac_list.append('{}{}'.format(mac[mac_byte * 2], mac[mac_byte * 2 + 1]))
-            self.mac_address = ':'.join(mac_list)
+            self.mac_address = ':'.join(mac_list).lower()
             self._logger.info('mac address detected as %s', self.mac_address)
         pass
 
