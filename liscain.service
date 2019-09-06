@@ -1,0 +1,16 @@
+[Unit]
+Description=Liscain
+After=syslog.target
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+RuntimeDirectory=liscain
+ExecStart=/opt/liscain-ng/env/bin/python /opt/liscain-ng/liscain.py
+WorkingDirectory=/opt/liscain-ng
+
+[Install]
+WantedBy=multi-user.target
+

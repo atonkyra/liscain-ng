@@ -59,7 +59,7 @@ def serve_file(name, **kwargs):
 
 
 def tftp_server():
-    srv = tftpy.TftpServer(tftproot=None, dyn_file_func=serve_file)
+    srv = tftpy.TftpServer(tftproot='/var/run/liscain', dyn_file_func=serve_file)
     srv.listen()
 
 
