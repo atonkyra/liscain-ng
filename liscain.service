@@ -8,6 +8,7 @@ Type=simple
 User=root
 Group=root
 RuntimeDirectory=liscain
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/opt/liscain-ng/env/bin/python /opt/liscain-ng/liscain.py
 WorkingDirectory=/opt/liscain-ng
 
