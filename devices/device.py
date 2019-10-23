@@ -14,6 +14,7 @@ class Device(lib.db.base):
     device_type = Column(String, nullable=False, default='UNKNOWN')
     device_class = Column(String, nullable=False)
     mac_address = Column(String, nullable=False, default='UNKNOWN')
+    version = Column(String, nullable=False, default='UNKNOWN')
 
     def __init__(self):
         super().__init__()
@@ -26,6 +27,7 @@ class Device(lib.db.base):
         self.state = lib.switchstate.SwitchState.INIT
         self.device_type = 'UNKNOWN'
         self.mac_address = 'UNKNOWN'
+        self.version = 'UNKNOWN'
         self._logger.info('initialized switch information')
 
     @orm.reconstructor

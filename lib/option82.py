@@ -152,6 +152,7 @@ class Option82:
                     ready_device.change_state(SwitchState.CONFIGURE_FAILED)
                     self._logger.error('failed to change identity for %s, failing configuration step', switch_name)
                     continue
+                time.sleep(1)
                 threading.Thread(target=ready_device.configure, daemon=True, args=(switch_config,)).start()
 
     def autoadopt(self, zmq_context):

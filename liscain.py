@@ -178,8 +178,13 @@ def main():
     zmq_sock.bind(config.get('liscain', 'command_socket'))
 
     option82_controller = lib.option82.Option82()
-    option82_controller_autoadopt = threading.Thread(target=option82_controller.autoadopt, args=(zmq_context,))
-    option82_controller_autoadopt.start()
+
+    if config.get('liscain', 'autoconf_enabled') == 'yes':
+        logger.info('autoconfiguration enabled')
+        option82_controller_autoadopt = threading.Thread(target=option82_controller.autoadopt, args=(zmq_context,))
+        option82_controller_autoadopt.start()
+    else:
+        logger.info('autoconfiguration disabled')
 
     while True:
         msg = zmq_sock.recv_json()

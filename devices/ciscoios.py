@@ -51,6 +51,7 @@ class CiscoIOS(devices.device.Device):
                 self._write(tc, 'terminal length 0')
                 self._read_mac(tc)
                 self._read_pid(tc)
+                self._read_version(tc)
                 self._logger.info('generating ssh keys...')
                 self._write(tc, 'configure terminal')
                 self._write(tc, 'ip ssh rsa keypair-name ssh')
@@ -74,7 +75,7 @@ class CiscoIOS(devices.device.Device):
 
     def configure(self, switch_config):
         try:
-            tc = telnetlib.Telnet(self.address, timeout=3)
+            tc = telnetlib.Telnet(self.address, timeout=10)
             self._write(tc, None, [b'\r\n[Uu]sername: '])
             self._write(tc, config.get('liscain', 'liscain_init_username'), [b'\r\n[Pp]assword: '])
             self._write(tc, config.get('liscain', 'liscain_init_password'))
@@ -160,6 +161,13 @@ class CiscoIOS(devices.device.Device):
         if data is not None:
             self.device_type = data.group(1)
             self._logger.info('type detected as %s', self.device_type)
+            self.save()
+
+    def _read_version(self, telnet_client):
+        data = re.search(r'Cisco IOS.+Version ([^\s]+), ', self._write(telnet_client, 'show version'))
+        if data is not None:
+            self.version = data.group(1)
+            self._logger.info('version detected as %s', self.version)
             self.save()
 
     def emit_base_config(self):

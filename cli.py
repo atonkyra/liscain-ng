@@ -35,7 +35,7 @@ def show_devices(device_listing):
     table = beautifultable.BeautifulTable()
     table.default_alignment = beautifultable.ALIGN_LEFT
     table.max_table_width = 128
-    table.column_headers = ['id', 'identifier', 'device_class', 'device_type', 'address', 'mac_address', 'state']
+    table.column_headers = ['id', 'identifier', 'device_class', 'device_type', 'version', 'address', 'mac_address', 'state']
     for device in device_listing:
         row = []
         for col in table.column_headers:
