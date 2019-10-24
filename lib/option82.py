@@ -134,7 +134,20 @@ class Option82:
         for ready_device in ready_devices:
             if ready_device.mac_address in assoc_map:
                 autoconf_path = config.get('liscain', 'autoconf_path')
+                whitelisted_prefixes = config.get('liscain', 'autoconf_version_whitelist_prefix')
+                autoconf_ok = False
+                if whitelisted_prefixes is None:
+                    autoconf_ok = True
+                else:
+                    whitelisted_prefixes = whitelisted_prefixes.split(',')
+                    for whitelisted_prefix in whitelisted_prefixes:
+                        if ready_device.version.startswith(whitelisted_prefix):
+                            autoconf_ok = True
+                            break
                 switch_name = assoc_map[ready_device.mac_address].downstream_switch_name
+                if not autoconf_ok:
+                    self._logger.info('%s (%s @ %s) does not meet autoconf criteria (version)', switch_name, ready_device.identifier, ready_device.address)
+                    continue
                 config_path = '{}/{}.cfg'.format(autoconf_path, switch_name)
 
                 self._logger.info('trying autoadopt for %s', switch_name)

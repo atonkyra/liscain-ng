@@ -157,7 +157,7 @@ class CiscoIOS(devices.device.Device):
         pass
 
     def _read_pid(self, telnet_client):
-        data = re.search(r'PID: ([a-zA-Z0-9-]+)', self._write(telnet_client, 'show inventory'))
+        data = re.search(r'PID: ([^\s]+)', self._write(telnet_client, 'show inventory'))
         if data is not None:
             self.device_type = data.group(1)
             self._logger.info('type detected as %s', self.device_type)
