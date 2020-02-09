@@ -170,7 +170,7 @@ class Option82:
 
     def autoadopt(self, zmq_context):
         zmq_socket = zmq_context.socket(zmq.PULL)
-        zmq_socket.bind('tcp://127.0.0.1:9912')
+        zmq_socket.bind(config.get('liscain', 'opt82_zmq_listener'))
         i = 0
         while True:
             msg_received = False
