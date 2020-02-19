@@ -55,7 +55,7 @@ class CiscoIOS(devices.device.Device):
                 self._logger.info('generating ssh keys...')
                 self._write(tc, 'configure terminal')
                 self._write(tc, 'ip ssh rsa keypair-name ssh')
-                self._write(tc, 'crypto key generate rsa mod 2048 label ssh', timeout=120)
+                self._write(tc, 'crypto key generate rsa general-keys label ssh mod 2048', timeout=120)
                 self._write(tc, 'sdm prefer dual-ipv4-and-ipv6 default', timeout=10)
                 self._write(tc, 'sdm prefer dual-ipv4-and-ipv6 vlan', timeout=10)
                 self._write(tc, 'end')
