@@ -91,23 +91,33 @@ class Option82:
                         Option82Info.upstream_port_info == upstream_port_info
                     )
                 ).one()
+                old_downstream_switch_name = info.downstream_switch_name
                 info.downstream_switch_name = downstream_switch_name
                 ses.add(info)
                 ses.commit()
+                if old_downstream_switch_name != downstream_switch_name:
+                    self._logger.info(
+                        'option82 association changed %s -> %s for %s @ %s',
+                        old_downstream_switch_name,
+                        downstream_switch_name,
+                        upstream_switch_mac,
+                        upstream_port_info
+                    )
             except sqlalchemy.orm.exc.NoResultFound:
+                changes = False
                 info = Option82Info()
                 info.upstream_switch_mac = upstream_switch_mac
                 info.upstream_port_info = upstream_port_info
                 info.downstream_switch_name = downstream_switch_name
                 ses.add(info)
                 ses.commit()
-            finally:
                 self._logger.info(
-                    'option82 association set to %s for %s @ %s',
+                    'option82 association created to %s for %s @ %s',
                     downstream_switch_name,
                     upstream_switch_mac,
                     upstream_port_info
                 )
+            finally:
                 return info.as_dict()
 
     def _handle_message(self, message):
@@ -129,13 +139,13 @@ class Option82:
         association = None
         with sql_ses() as ses:
             try:
-                associations = ses.query(Option82Info).filter(
+                association = ses.query(Option82Info).filter(
                     Option82Info.downstream_switch_mac == device.mac_address
                 ).one()
             except sqlalchemy.orm.exc.NoResultFound:
-                associations = None
+                association = None
         if association is None:
-            self._logger.info('opt82/%s could not find association for %s', device.identifier, device.address)
+            self._logger.info('opt82/%s: could not find association for %s', device.identifier, device.address)
             return
         autoconf_path = config.get('liscain', 'autoconf_path')
         whitelisted_prefixes = config.get('liscain', 'autoconf_version_whitelist_prefix')
@@ -151,31 +161,31 @@ class Option82:
         switch_name = association.downstream_switch_name
         if not version_ok:
             self._logger.info(
-                '%s (%s @ %s) does not meet autoconf criteria (version)',
-                switch_name, device.identifier, device.address
+                'opt82/%s (%s @ %s) does not meet autoconf criteria (version)',
+                device.identifier, switch_name, device.address
             )
             return
 
         config_path = '{}/{}.cfg'.format(autoconf_path, switch_name)
-        self._logger.info('trying autoadopt for %s', switch_name)
+        self._logger.info('opt82/%s: trying autoadopt for %s', device.identifier, switch_name)
         switch_config = None
         try:
             with open(config_path) as fp:
                 switch_config = fp.read()
         except FileNotFoundError:
-            self._logger.error('failed to open %s for switch autoconfiguration', config_path)
+            self._logger.error('opt82/%s: failed to open %s for switch autoconfiguration', device.identifier, config_path)
             return
-        queue_result = self._commander.enqueue(
-            device,
-            tasks.DeviceConfigurationTask(device),
-            identity=switch_name, configuration=switch_config
-        )
-        if not queue_result:
-            self._logger.error('FIXME')
+        try:
+            self._commander.enqueue(
+                device,
+                tasks.DeviceConfigurationTask(device, identity=switch_name, configuration=switch_config),
+            )
+        except BaseException as e:
+            self._logger.error(e)
 
     def autoadopt_mapping_listener(self, zmq_context):
         zmq_socket = zmq_context.socket(zmq.PULL)
-        zmq_socket.bind('tcp://127.0.0.1:9912')
+        zmq_socket.bind(config.get('liscain', 'opt82_zmq_listener'))
         while True:
             try:
                 msg = zmq_socket.recv_json()

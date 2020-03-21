@@ -55,9 +55,9 @@ class CiscoIOS(devices.device.Device):
                 self._logger.info('generating ssh keys...')
                 self._write(tc, 'configure terminal')
                 self._write(tc, 'ip ssh rsa keypair-name ssh')
-                self._write(tc, 'crypto key generate rsa mod 2048 label ssh', timeout=120)
-                self._write(tc, 'sdm prefer dual-ipv4-and-ipv6 default', timeout=20)
-                self._write(tc, 'sdm prefer dual-ipv4-and-ipv6 vlan', timeout=20)
+                self._write(tc, 'crypto key generate rsa general-keys label ssh mod 2048', timeout=120)
+                self._write(tc, 'sdm prefer dual-ipv4-and-ipv6 default', timeout=10)
+                self._write(tc, 'sdm prefer dual-ipv4-and-ipv6 vlan', timeout=10)
                 self._write(tc, 'end')
                 self._write(tc, 'exit')
                 self._logger.debug('logged out')
@@ -101,10 +101,12 @@ class CiscoIOS(devices.device.Device):
             except socket.timeout:
                 pass
             self._logger.debug('[configure] completed')
+            return True
         except socket.timeout:
             self._logger.error('[configure] timed out')
+            return False
         except EOFError:
-            pass
+            return True
 
     def change_identity(self, identity):
         old_identity = self.identifier
