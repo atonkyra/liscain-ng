@@ -21,16 +21,23 @@ class Commander(threading.Thread):
                 self.start()
             self._command_queues[device.id].enqueue_task(task)
 
+    def get_queue_list(self, device):
+        with self._command_queue_lock:
+            if device.id not in self._command_queues:
+                return []
+            return self._command_queues[device.id].get_queue_list()
+
     def stop(self):
         self._stop_event.set()
-        self.join()
+        if self.is_alive():
+            self.join()
 
     def run(self):
         while not self._stop_event.is_set():
             with self._command_queue_lock:
                 delete_list = []
                 for device_id, command_queue in self._command_queues.items():
-                    if command_queue.length() == 0:
+                    if command_queue.length() == 0 or not command_queue.is_alive():
                         command_queue.stop()
                         delete_list.append(device_id)
                 for device_id in delete_list:

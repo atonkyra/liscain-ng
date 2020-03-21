@@ -23,12 +23,20 @@ class CommandQueue(threading.Thread):
         if not self.is_alive():
             self.start()
 
+    def get_queue_list(self):
+        out = []
+        with self._command_queue_lock:
+            for item in self._command_queue:
+                out.append(item.__class__)
+        return out
+
     def length(self):
         return len(self._command_queue)
 
     def stop(self):
         self._stop_event.set()
-        self.join()
+        if self.is_alive():
+            self.join()
 
     def run(self):
         while not self._stop_event.is_set():

@@ -82,7 +82,10 @@ def handle_msg(message):
         with lib.db.sql_ses() as ses:
             devices = ses.query(Device).all()
             for device in devices:
-                ret.append(device.as_dict())
+                queued_commands = len(commander.get_queue_list(device))
+                device_dict = device.as_dict()
+                device_dict['cqueue'] = queued_commands
+                ret.append(device_dict)
         return ret
 
     elif cmd == 'neighbor-info':
@@ -117,7 +120,11 @@ def handle_msg(message):
         with lib.db.sql_ses() as ses:
             try:
                 device = ses.query(Device).filter(Device.id == device_id).one()
-                return device.as_dict()
+                queued_commands = commander.get_queue_list(device)
+                device_dict = device.as_dict()
+                device_dict['cqueue'] = len(queued_commands)
+                device_dict['cqueue_items'] = queued_commands
+                return device_dict
             except sqlalchemy.orm.exc.NoResultFound:
                 return {'error': 'device not found'}
 
@@ -138,12 +145,37 @@ def handle_msg(message):
             except sqlalchemy.orm.exc.NoResultFound:
                 return {'error': 'device not found'}
         remap_to_subclass(device)
-        if not commander.enqueue(
-            device,
-            tasks.DeviceConfigurationTask(device, identity=identity, configuration=switch_config)
-        ):
-            return {'error': 'FIXME'}
-        return device.as_dict()
+        try:
+            commander.enqueue(
+                device,
+                tasks.DeviceConfigurationTask(device, identity=identity, configuration=switch_config)
+            )
+            return {'info': 'ok'}
+        except BaseException as e:
+            return {'error': str(e)}
+
+    elif cmd == 'reinit':
+        device_id = message.get('id', None)
+        if device_id is None:
+            return {'error': 'missing device id'}
+        device = None
+        with lib.db.sql_ses() as ses:
+            try:
+                device = ses.query(Device).filter(Device.id == device_id).one()
+            except sqlalchemy.orm.exc.NoResultFound:
+                return {'error': 'device not found'}
+        remap_to_subclass(device)
+        try:
+            task = tasks.DeviceInitializationTask(device)
+            if config.get('liscain', 'autoconf_enabled') == 'yes':
+                task.hook(SwitchState.READY, option82_controller.autoadopt)
+            commander.enqueue(
+                device,
+                task
+            )
+            return {'info': 'ok'}
+        except BaseException as e:
+            return {'error': str(e)}
 
     elif cmd == 'opt82-info':
         upstream_switch_mac = message.get('upstream_switch_mac', None)

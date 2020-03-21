@@ -1,6 +1,7 @@
 from devices.device import Device
 from lib.switchstate import SwitchState
 import typing
+import logging
 
 
 class DeviceTask:
@@ -10,6 +11,9 @@ class DeviceTask:
         self.complete: bool = False
         self._args: typing.Dict[str, str] = kwargs
         self._hooks: typing.Dict[SwitchState, typing.Any] = dict()
+
+    def get_logger(self, name):
+        return logging.getLogger('[{}/{}]'.format(name, self._device.id))
 
     def validate(self) -> bool:
         raise NotImplementedError("validate not implemented")
