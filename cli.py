@@ -12,6 +12,7 @@ init_args, inner_args = init_parser.parse_known_args()
 
 parser = argparse.ArgumentParser(description='liscain-cli')
 if init_args.mode == 'device':
+    parser.add_argument('-I', '--initialize-id', required=False, help='(re)initialize', type=int, default=None)
     parser.add_argument('-n', '--neighbor-info-by-id', required=False, help='show switch neighbor info by id', type=int, default=None)
     parser.add_argument('-a', '--adopt-by-id', required=False, help='adopt a switch by id', type=int, default=None)
     parser.add_argument('-m', '--adopt-by-mac', required=False, help='adopt a switch by (partial) mac', default=None)

@@ -7,8 +7,10 @@ import zmq
 import time
 from devices import remap_to_subclass
 from devices.device import Device
+import tasks
 from lib.switchstate import SwitchState
 import threading
+from lib.commander import Commander
 
 
 class Option82Info(base):
@@ -33,8 +35,9 @@ class Option82Info(base):
 
 
 class Option82:
-    def __init__(self):
+    def __init__(self, commander: Commander):
         self._logger = logging.getLogger('option82')
+        self._commander = commander
 
     def update_info(self, upstream_switch_mac, upstream_port_info, downstream_switch_mac):
         with sql_ses() as ses:
@@ -121,67 +124,61 @@ class Option82:
             return
         self.update_info(upstream_switch_mac, upstream_port_info, downstream_switch_mac)
 
-    def _check_autoadopt_switches(self):
+    def autoadopt(self, device):
         ready_devices = None
-        associations = None
+        association = None
         with sql_ses() as ses:
-            ready_devices = ses.query(Device).filter(Device.state == SwitchState.READY).all()
-            associations = ses.query(Option82Info).all()
-        assoc_map = {}
-        for assoc in associations:
-            if assoc.downstream_switch_mac is not None:
-                assoc_map[assoc.downstream_switch_mac] = assoc
-        for ready_device in ready_devices:
-            if ready_device.mac_address in assoc_map:
-                autoconf_path = config.get('liscain', 'autoconf_path')
-                whitelisted_prefixes = config.get('liscain', 'autoconf_version_whitelist_prefix')
-                autoconf_ok = False
-                if whitelisted_prefixes is None:
-                    autoconf_ok = True
-                else:
-                    whitelisted_prefixes = whitelisted_prefixes.split(',')
-                    for whitelisted_prefix in whitelisted_prefixes:
-                        if ready_device.version.startswith(whitelisted_prefix):
-                            autoconf_ok = True
-                            break
-                switch_name = assoc_map[ready_device.mac_address].downstream_switch_name
-                if not autoconf_ok:
-                    self._logger.info('%s (%s @ %s) does not meet autoconf criteria (version)', switch_name, ready_device.identifier, ready_device.address)
-                    continue
-                config_path = '{}/{}.cfg'.format(autoconf_path, switch_name)
+            try:
+                associations = ses.query(Option82Info).filter(
+                    Option82Info.downstream_switch_mac == device.mac_address
+                ).one()
+            except sqlalchemy.orm.exc.NoResultFound:
+                associations = None
+        if association is None:
+            self._logger.info('opt82/%s could not find association for %s', device.identifier, device.address)
+            return
+        autoconf_path = config.get('liscain', 'autoconf_path')
+        whitelisted_prefixes = config.get('liscain', 'autoconf_version_whitelist_prefix')
+        version_ok = False
+        if whitelisted_prefixes is None:
+            version_ok = True
+        else:
+            whitelisted_prefixes = whitelisted_prefixes.split(',')
+            for whitelisted_prefix in whitelisted_prefixes:
+                if device.version.startswith(whitelisted_prefix):
+                    version_ok = True
+                    break
+        switch_name = association.downstream_switch_name
+        if not version_ok:
+            self._logger.info(
+                '%s (%s @ %s) does not meet autoconf criteria (version)',
+                switch_name, device.identifier, device.address
+            )
+            return
 
-                self._logger.info('trying autoadopt for %s', switch_name)
+        config_path = '{}/{}.cfg'.format(autoconf_path, switch_name)
+        self._logger.info('trying autoadopt for %s', switch_name)
+        switch_config = None
+        try:
+            with open(config_path) as fp:
+                switch_config = fp.read()
+        except FileNotFoundError:
+            self._logger.error('failed to open %s for switch autoconfiguration', config_path)
+            return
+        queue_result = self._commander.enqueue(
+            device,
+            tasks.DeviceConfigurationTask(device),
+            identity=switch_name, configuration=switch_config
+        )
+        if not queue_result:
+            self._logger.error('FIXME')
 
-                switch_config = None
-                try:
-                    with open(config_path) as fp:
-                        switch_config = fp.read()
-                except FileNotFoundError:
-                    self._logger.error('failed to open %s for switch autoconfiguration', config_path)
-                    continue
-                remap_to_subclass(ready_device)
-                ready_device.change_state(SwitchState.CONFIGURING)
-                if not ready_device.change_identity(switch_name):
-                    ready_device.change_state(SwitchState.CONFIGURE_FAILED)
-                    self._logger.error('failed to change identity for %s, failing configuration step', switch_name)
-                    continue
-                time.sleep(1)
-                threading.Thread(target=ready_device.configure, daemon=True, args=(switch_config,)).start()
-
-    def autoadopt(self, zmq_context):
+    def autoadopt_mapping_listener(self, zmq_context):
         zmq_socket = zmq_context.socket(zmq.PULL)
         zmq_socket.bind('tcp://127.0.0.1:9912')
-        i = 0
         while True:
-            msg_received = False
             try:
-                msg = zmq_socket.recv_json(flags=zmq.NOBLOCK)
+                msg = zmq_socket.recv_json()
                 self._handle_message(msg)
-                msg_received = True
             except zmq.Again:
                 pass
-            if i % 10 == 0:
-                self._check_autoadopt_switches()
-            if not msg_received:
-                time.sleep(0.1)
-            i += 1

@@ -1,5 +1,5 @@
 import lib.db
-import lib.switchstate
+from lib.switchstate import SwitchState
 from sqlalchemy import Column, Integer, String, orm, Enum
 import logging
 from enum import Enum as PyEnum
@@ -10,7 +10,7 @@ class Device(lib.db.base):
     id = Column(Integer, primary_key=True)
     identifier = Column(String, nullable=False, default=None)
     address = Column(String, nullable=False, default=None)
-    state = Column(Enum(lib.switchstate.SwitchState), nullable=False, default=None)
+    state = Column(Enum(SwitchState), nullable=False, default=None)
     device_type = Column(String, nullable=False, default='UNKNOWN')
     device_class = Column(String, nullable=False)
     mac_address = Column(String, nullable=False, default='UNKNOWN')
@@ -24,7 +24,7 @@ class Device(lib.db.base):
         self._logger = logging.getLogger('[{}]'.format(identifier))
         self.identifier = identifier
         self.address = address
-        self.state = lib.switchstate.SwitchState.INIT
+        self.state = lib.switchstate.SwitchState.NEW
         self.device_type = 'UNKNOWN'
         self.mac_address = 'UNKNOWN'
         self.version = 'UNKNOWN'
@@ -39,7 +39,10 @@ class Device(lib.db.base):
         self._logger.error('called default neighbor info, this is not implemented')
         return 'unknown'
 
-    def change_state(self, state):
+    def initial_setup(self) -> bool:
+        raise NotImplementedError('initial setup not implemented')
+
+    def change_state(self, state: SwitchState):
         self._logger.info('change state %s -> %s', self.state, state)
         self.state = state
         self.save()

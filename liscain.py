@@ -4,6 +4,7 @@ import ipaddress
 import threading
 import lib.db
 import sqlalchemy.orm
+import tasks
 from sqlalchemy import and_
 from devices import remap_to_subclass
 from devices.device import Device
@@ -12,6 +13,7 @@ from io import StringIO
 from lib.config import config
 from lib.switchstate import SwitchState
 from lib.option82 import Option82
+from lib.commander import Commander
 import zmq
 
 
@@ -26,9 +28,17 @@ logging.getLogger('tftpy.TftpPacketTypes').setLevel(logging.CRITICAL)
 logging.getLogger('tftpy.TftpStates').setLevel(logging.CRITICAL)
 
 
-def serve_file(name, **kwargs):
-    remote_address = kwargs['raddress']
-    remote_id = 'lc-{:02x}'.format(int(ipaddress.ip_address(remote_address)))
+commander: Commander = Commander()
+commander.start()
+option82_controller: lib.option82.Option82 = lib.option82.Option82(commander)
+
+
+def serve_file(name: str, **kwargs) -> StringIO:
+    global commander
+    global option82_controller
+
+    remote_address: str = kwargs['raddress']
+    remote_id: str = 'lc-{:02x}'.format(int(ipaddress.ip_address(remote_address)))
     if name in ['network-confg']:
         device = None
         with lib.db.sql_ses() as ses:
@@ -45,25 +55,27 @@ def serve_file(name, **kwargs):
                 ses.add(device)
                 ses.commit()
                 ses.refresh(device)
-        if device.state in [SwitchState.INIT, SwitchState.INIT_IN_PROGRESS, SwitchState.INIT_TIMEOUT, SwitchState.READY]:
-            if device.state != SwitchState.INIT_IN_PROGRESS:
-                device.change_state(SwitchState.INIT_IN_PROGRESS)
-                threading.Thread(target=device.initial_setup, daemon=True).start()
-            return device.emit_base_config()
-        else:
-            logger.info('%s requests config, but is in state %s', remote_id, device.state)
-        return StringIO()
+        try:
+            task = tasks.DeviceInitializationTask(device)
+            if config.get('liscain', 'autoconf_enabled') == 'yes':
+                task.hook(SwitchState.READY, option82_controller.autoadopt)
+            commander.enqueue(device, task)
+        except KeyError as e:
+            logger.error('init/%s: %s', remote_id, e)
+        return device.emit_base_config()
     else:
         logger.debug('%s requested %s, ignoring', remote_id, name)
     return StringIO()
 
 
 def tftp_server():
-    srv = tftpy.TftpServer(tftproot='/var/run/liscain', dyn_file_func=serve_file)
+    srv = tftpy.TftpServer(tftproot='c:/tmp', dyn_file_func=serve_file)
     srv.listen()
 
 
-def handle_msg(message, option82_controller):
+def handle_msg(message):
+    global option82_controller
+
     cmd = message.get('cmd', None)
     if cmd == 'list':
         ret = []
@@ -125,14 +137,12 @@ def handle_msg(message, option82_controller):
                 device = ses.query(Device).filter(Device.id == device_id).one()
             except sqlalchemy.orm.exc.NoResultFound:
                 return {'error': 'device not found'}
-        if device.state not in [SwitchState.CONFIGURE_FAILED, SwitchState.READY]:
-            return {'error': 'switch not in READY or CONFIGURE_FAILED state'}
         remap_to_subclass(device)
-        device.change_state(SwitchState.CONFIGURING)
-        if not device.change_identity(identity):
-            device.change_state(SwitchState.CONFIGURE_FAILED)
-            return {'error': 'failed to change identity, failing configuration step'}
-        threading.Thread(target=device.configure, daemon=True, args=(switch_config,)).start()
+        if not commander.enqueue(
+            device,
+            tasks.DeviceConfigurationTask(device, identity=identity, configuration=switch_config)
+        ):
+            return {'error': 'FIXME'}
         return device.as_dict()
 
     elif cmd == 'opt82-info':
@@ -170,25 +180,25 @@ def handle_msg(message, option82_controller):
 
 
 def main():
+    global option82_controller
+
     lib.db.initialize(config.get('liscain', 'database'))
-    tftp_task = threading.Thread(target=tftp_server, daemon=True)
+    tftp_task: threading.Thread = threading.Thread(target=tftp_server, daemon=True)
     tftp_task.start()
-    zmq_context = zmq.Context()
-    zmq_sock = zmq_context.socket(zmq.REP)
+    zmq_context: zmq.Context = zmq.Context(10)
+    zmq_sock: zmq.socket = zmq_context.socket(zmq.REP)
     zmq_sock.bind(config.get('liscain', 'command_socket'))
 
-    option82_controller = lib.option82.Option82()
-
-    if config.get('liscain', 'autoconf_enabled') == 'yes':
-        logger.info('autoconfiguration enabled')
-        option82_controller_autoadopt = threading.Thread(target=option82_controller.autoadopt, args=(zmq_context,))
-        option82_controller_autoadopt.start()
-    else:
-        logger.info('autoconfiguration disabled')
+    option82_controller_autoadopt: threading.Thread = threading.Thread(
+        target=option82_controller.autoadopt_mapping_listener,
+        args=(zmq_context,),
+        daemon=True
+    )
+    option82_controller_autoadopt.start()
 
     while True:
-        msg = zmq_sock.recv_json()
-        zmq_sock.send_json(handle_msg(msg, option82_controller))
+        msg: dict = zmq_sock.recv_json()
+        zmq_sock.send_json(handle_msg(msg))
 
 
 if __name__ == '__main__':

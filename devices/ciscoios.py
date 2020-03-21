@@ -39,11 +39,11 @@ class CiscoIOS(devices.device.Device):
             self._logger.info('switch not ready while getting neighbor info')
             return 'unknown'
 
-    def initial_setup(self):
+    def initial_setup(self) -> bool:
         retry_max = 10
         for retry in range(1, retry_max+1):
             try:
-                tc = telnetlib.Telnet(self.address, timeout=3)
+                tc = telnetlib.Telnet(self.address, timeout=10)
                 self._write(tc, None, [b'\r\n[Uu]sername: '])
                 self._write(tc, config.get('liscain', 'liscain_init_username'), [b'\r\n[Pp]assword: '])
                 self._write(tc, config.get('liscain', 'liscain_init_password'))
@@ -56,22 +56,21 @@ class CiscoIOS(devices.device.Device):
                 self._write(tc, 'configure terminal')
                 self._write(tc, 'ip ssh rsa keypair-name ssh')
                 self._write(tc, 'crypto key generate rsa mod 2048 label ssh', timeout=120)
-                self._write(tc, 'sdm prefer dual-ipv4-and-ipv6 default', timeout=10)
-                self._write(tc, 'sdm prefer dual-ipv4-and-ipv6 vlan', timeout=10)
+                self._write(tc, 'sdm prefer dual-ipv4-and-ipv6 default', timeout=20)
+                self._write(tc, 'sdm prefer dual-ipv4-and-ipv6 vlan', timeout=20)
                 self._write(tc, 'end')
                 self._write(tc, 'exit')
                 self._logger.debug('logged out')
-                self.change_state(SwitchState.READY)
-                self._logger.info('successfully initialized switch, state now %s', self.state)
-                return
+                self._logger.info('successfully initialized switch')
+                return True
             except socket.timeout:
                 self._logger.info('timeout, retry %i/%i', retry, retry_max)
                 continue
             except EOFError:
                 self._logger.info('switch not ready, wait 10s (retry %i/%i)', retry, retry_max)
                 time.sleep(10)
-        self.change_state(SwitchState.INIT_TIMEOUT)
-        self._logger.error('failed to fetch information from switch')
+        self._logger.error('failed initial setup')
+        return False
 
     def configure(self, switch_config):
         try:
@@ -102,7 +101,6 @@ class CiscoIOS(devices.device.Device):
             except socket.timeout:
                 pass
             self._logger.debug('[configure] completed')
-            self.change_state(SwitchState.CONFIGURED)
         except socket.timeout:
             self._logger.error('[configure] timed out')
         except EOFError:
@@ -111,7 +109,7 @@ class CiscoIOS(devices.device.Device):
     def change_identity(self, identity):
         old_identity = self.identifier
         try:
-            tc = telnetlib.Telnet(self.address, timeout=3)
+            tc = telnetlib.Telnet(self.address, timeout=10)
             self._write(tc, None, [b'\r\n[Uu]sername: '])
             self._write(tc, config.get('liscain', 'liscain_init_username'), [b'\r\n[Pp]assword: '])
             self._write(tc, config.get('liscain', 'liscain_init_password'))
