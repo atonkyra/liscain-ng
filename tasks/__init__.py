@@ -1,0 +1,3 @@
+from tasks.devicetask import DeviceTask
+from tasks.deviceinitializationtask import DeviceInitializationTask
+from tasks.deviceconfigurationtask import DeviceConfigurationTask

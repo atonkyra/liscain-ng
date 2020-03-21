@@ -2,3 +2,6 @@
 /.idea
 /liscain.sqlite
 /config
+/venv38
+/config.ini
+__pycache__

@@ -6,7 +6,7 @@ database = sqlite:///liscain.sqlite
 autoconf_path = config
 
 opt82_zmq_listener = tcp://127.0.0.1:9912
-command_socket = tcp://127.0.0.1:1337
+command_socket = tcp://127.0.0.1:1338
 
 autoconf_enabled = yes
 
