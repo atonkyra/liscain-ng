@@ -1,3 +1,4 @@
+import tempfile
 import tftpy
 import logging
 import ipaddress
@@ -69,8 +70,9 @@ def serve_file(name: str, **kwargs) -> StringIO:
 
 
 def tftp_server():
-    srv = tftpy.TftpServer(tftproot='c:/tmp', dyn_file_func=serve_file)
-    srv.listen()
+    with tempfile.TemporaryDirectory() as td:
+        srv = tftpy.TftpServer(tftproot=td, dyn_file_func=serve_file)
+        srv.listen()
 
 
 def handle_msg(message):

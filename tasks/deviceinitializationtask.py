@@ -9,7 +9,7 @@ class DeviceInitializationTask(DeviceTask):
         self._logger = self.get_logger('deviceinit')
 
     def validate(self):
-        if self._device.state not in [SwitchState.NEW, SwitchState.INIT, SwitchState.INIT_FAILED, SwitchState.READY]:
+        if self._device.state not in [SwitchState.NEW, SwitchState.INIT, SwitchState.INIT_FAILED, SwitchState.READY, SwitchState.CONFIGURE_FAILED]:
             raise KeyError('switch not in correct state for initialization')
 
     def run(self):
