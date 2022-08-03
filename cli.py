@@ -34,7 +34,7 @@ args = parser.parse_args(inner_args)
 def show_devices(device_listing):
     table = beautifultable.BeautifulTable()
     table.default_alignment = beautifultable.ALIGN_LEFT
-    table.max_table_width = 128
+    table.max_table_width = 144
     table.column_headers = ['id', 'identifier', 'device_class', 'device_type', 'version', 'address', 'mac_address', 'state', 'cqueue']
     for device in device_listing:
         row = []

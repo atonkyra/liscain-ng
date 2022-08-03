@@ -9,7 +9,7 @@ class DeviceConfigurationTask(tasks.devicetask.DeviceTask):
         self._logger = self.get_logger('deviceconf')
 
     def validate(self) -> bool:
-        if self._device.state not in [SwitchState.READY]:
+        if self._device.state not in [SwitchState.READY, SwitchState.CONFIGURE_FAILED]:
             raise KeyError('switch not in correct state for configuration')
 
     def run(self):

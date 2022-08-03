@@ -72,8 +72,27 @@ class CiscoIOS(devices.device.Device):
         self._logger.error('failed initial setup')
         return False
 
+    def _parse_confighints(self, config):
+        hints = {}
+        for line in config.split('\n'):
+            line = line.strip()
+            if not line.startswith('! liscain::'):
+                continue
+            key, value = line.split('::')[-1].split()
+            hints[key.strip()] = value.strip()
+        return hints
+
     def configure(self, switch_config):
         try:
+            hints = self._parse_confighints(switch_config)
+            if 'device_type' in hints:
+                if hints['device_type'].lower() not in self.device_type.lower():
+                    self._logger.error(
+                        '[configure] wrong device type, expected %s within %s',
+                        hints['device_type'],
+                        self.device_type,
+                    )
+                    return False
             tc = telnetlib.Telnet(self.address, timeout=10)
             self._write(tc, None, [b'\r\n[Uu]sername: '])
             self._write(tc, config.get('liscain', 'liscain_init_username'), [b'\r\n[Pp]assword: '])
