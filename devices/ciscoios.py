@@ -86,7 +86,7 @@ class CiscoIOS(devices.device.Device):
         try:
             hints = self._parse_confighints(switch_config)
             if 'device_type' in hints:
-                if hints['device_type'].lower() not in self.device_type.lower():
+                if not re.search(hints['device_type'], self.device_type, re.IGNORECASE):
                     self._logger.error(
                         '[configure] wrong device type, expected %s within %s',
                         hints['device_type'],
