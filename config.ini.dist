@@ -11,3 +11,7 @@ command_socket = tcp://127.0.0.1:1338
 autoconf_enabled = yes
 
 autoconf_version_whitelist_prefix = 15.
+
+# uncomment cdp or opt82 to use autoconfig
+#autoconf_mode = cdp
+#autoconf_mode = opt82

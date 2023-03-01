@@ -14,6 +14,7 @@ from io import StringIO
 from lib.config import config
 from lib.switchstate import SwitchState
 from lib.option82 import Option82
+from lib.cdp_adopter import CDPAdopter
 from lib.commander import Commander
 import zmq
 
@@ -31,11 +32,13 @@ logging.getLogger('tftpy.TftpStates').setLevel(logging.CRITICAL)
 
 commander: Commander = Commander()
 commander.start()
+cdp_adopter: lib.cdp_adopter.CDPAdopter = lib.cdp_adopter.CDPAdopter(commander)
 option82_controller: lib.option82.Option82 = lib.option82.Option82(commander)
 
 
 def serve_file(name: str, **kwargs) -> StringIO:
     global commander
+    global cdp_adopter
     global option82_controller
 
     remote_address: str = kwargs['raddress']
@@ -59,7 +62,10 @@ def serve_file(name: str, **kwargs) -> StringIO:
         try:
             task = tasks.DeviceInitializationTask(device)
             if config.get('liscain', 'autoconf_enabled') == 'yes':
-                task.hook(SwitchState.READY, option82_controller.autoadopt)
+                if config.get('liscain', 'autoconf_mode') == 'cdp':
+                    task.hook(SwitchState.READY, cdp_adopter.autoadopt)
+                if config.get('liscain', 'autoconf_mode') == 'opt82':
+                    task.hook(SwitchState.READY, option82_controller.autoadopt)
             commander.enqueue(device, task)
         except KeyError as e:
             logger.error('init/%s: %s', remote_id, e)
@@ -77,6 +83,7 @@ def tftp_server():
 
 def handle_msg(message):
     global option82_controller
+    global cdp_adopter
 
     cmd = message.get('cmd', None)
     if cmd == 'list':
@@ -170,7 +177,10 @@ def handle_msg(message):
         try:
             task = tasks.DeviceInitializationTask(device)
             if config.get('liscain', 'autoconf_enabled') == 'yes':
-                task.hook(SwitchState.READY, option82_controller.autoadopt)
+                if config.get('liscain', 'autoconf_mode') == 'cdp':
+                    task.hook(SwitchState.READY, cdp_adopter.autoadopt)
+                if config.get('liscain', 'autoconf_mode') == 'opt82':
+                    task.hook(SwitchState.READY, option82_controller.autoadopt)
             commander.enqueue(
                 device,
                 task

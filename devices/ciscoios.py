@@ -13,7 +13,7 @@ class CiscoIOS(devices.device.Device):
         super().__init__()
         self.device_class = 'CiscoIOS'
 
-    def neighbor_info(self):
+    def neighbor_info(self, full=False):
         try:
             tc = telnetlib.Telnet(self.address, timeout=3)
             self._write(tc, None, [b'\r\n[Uu]sername: '])
@@ -22,7 +22,8 @@ class CiscoIOS(devices.device.Device):
             self._write(tc, 'terminal length 0')
             nbr_info = ['cdp']
             neigh_info_started = False
-            for line in self._write(tc, 'show cdp neigh').split('\n')[:-1]:
+            command = 'show cdp neigh detail' if full else 'show cdp neigh'
+            for line in self._write(tc, command).split('\n')[:-1]:
                 line = line.strip()
                 if 'Device ID' in line:
                     neigh_info_started = True
