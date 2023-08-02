@@ -43,7 +43,7 @@ def serve_file(name: str, **kwargs) -> StringIO:
 
     remote_address: str = kwargs['raddress']
     remote_id: str = 'lc-{:02x}'.format(int(ipaddress.ip_address(remote_address)))
-    if name in ['network-confg']:
+    if name in ['network-confg', 'switch-confg']:
         device = None
         with lib.db.sql_ses() as ses:
             try:

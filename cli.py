@@ -20,6 +20,7 @@ if init_args.mode == 'device':
     parser.add_argument('-l', '--list', required=False, help='list switches', default=False, action='store_true')
     parser.add_argument('-d', '--delete-by-id', required=False, help='delete switch by id', default=None, type=int)
     parser.add_argument('-f', '--filter-list', required=False, help='filter list to states (can be repeated)', default=None, action='append')
+    parser.add_argument('-x', '--filter-except', required=False, help='filter list excluding states (can be repeated)', default=None, action='append')
 elif init_args.mode == 'opt82':
     parser.add_argument('-l', '--list', required=False, help='list option82 info', default=False, action='store_true')
     parser.add_argument('-d', '--delete-by-id', required=False, help='delete option 82 info by id', default=None, type=int)
@@ -42,6 +43,9 @@ def show_devices(device_listing):
             row.append(device[col])
         if args.filter_list is not None:
             if device['state'] not in args.filter_list:
+                continue
+        if args.filter_except is not None:
+            if device['state'] in args.filter_except:
                 continue
         table.append_row(row)
     print(table)
