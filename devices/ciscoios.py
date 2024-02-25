@@ -83,7 +83,7 @@ class CiscoIOS(devices.device.Device):
             hints[key.strip()] = value.strip()
         return hints
 
-    def configure(self, switch_config):
+    def configure(self, switch_config, tftp_storage):
         try:
             hints = self._parse_confighints(switch_config)
             if 'device_type' in hints:
@@ -98,19 +98,31 @@ class CiscoIOS(devices.device.Device):
             self._write(tc, None, [b'\r\n[Uu]sername: '])
             self._write(tc, config.get('liscain', 'liscain_init_username'), [b'\r\n[Pp]assword: '])
             self._write(tc, config.get('liscain', 'liscain_init_password'))
+            tftp_config_source = None
+            try:
+                tftp_config_source = config.get("liscain", "tftp_config_source")
+            except Exception:
+                pass
             self._logger.debug('[configure] logged in, begin configure')
-            self._write(tc, 'terminal length 0')
-            self._write(tc, 'tclsh')
-            tclsh_exp = [b'\\+>']
-            self._write(tc, 'puts [open "flash:liscain.config.in" w+] {', tclsh_exp, newline='\r')
-            for config_line in switch_config.split('\n'):
-                config_line = config_line.strip()
-                self._write(tc, config_line, tclsh_exp, newline='\r')
-            self._write(tc, '}')
-            self._write(tc, 'exit')
             self._write(tc, 'write')
-            self._write(tc, 'copy flash:liscain.config.in startup-config', [b'\r\n'])
-            self._write(tc, 'startup-config')
+            if tftp_config_source is None:
+                self._write(tc, 'terminal length 0')
+                self._write(tc, 'tclsh')
+                tclsh_exp = [b'\\+>']
+                self._write(tc, 'puts [open "flash:liscain.config.in" w+] {', tclsh_exp, newline='\r')
+                for config_line in switch_config.split('\n'):
+                    config_line = config_line.strip()
+                    self._write(tc, config_line, tclsh_exp, newline='\r')
+                self._write(tc, '}')
+                self._write(tc, 'exit')
+                self._write(tc, 'copy flash:liscain.config.in startup-config', [b'\r\n'])
+                self._write(tc, 'startup-config')
+            else:
+                k = tftp_storage.store(switch_config)
+                tftp_config_url = f'tftp://{tftp_config_source}/adopt/{k}'
+                self._logger.info("[configure] copying config %s to startup-config", tftp_config_url)
+                self._write(tc, f'copy {tftp_config_url} startup-config', [b'\r\n'])
+                self._write(tc, 'startup-config', timeout=120)
             try:
                 prompt = self._write(tc, 'reload', [b'yes/no', b'confirm'])
                 if 'yes/no' in prompt:

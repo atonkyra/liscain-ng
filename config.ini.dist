@@ -8,9 +8,13 @@ autoconf_path = config
 opt82_zmq_listener = tcp://127.0.0.1:9912
 command_socket = tcp://127.0.0.1:1338
 
-autoconf_enabled = yes
-
 autoconf_version_whitelist_prefix = 15.
+
+# uncomment with address of the TFTP server to download the configuration from
+# tftp_config_source = 172.24.2.1
+
+# set to yes to use autoconfiguration, uncomment one option below
+autoconf_enabled = no
 
 # uncomment cdp or opt82 to use autoconfig
 #autoconf_mode = cdp
