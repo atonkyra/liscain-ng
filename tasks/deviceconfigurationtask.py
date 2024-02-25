@@ -1,5 +1,6 @@
 import tasks.devicetask
 from lib.switchstate import SwitchState
+from lib.tftp_storage import TFTPStorage
 from devices.device import Device
 
 
@@ -18,7 +19,7 @@ class DeviceConfigurationTask(tasks.devicetask.DeviceTask):
             self._device.change_state(SwitchState.CONFIGURE_FAILED)
             self._logger.info('identity setup failed')
             return
-        if not self._device.configure(self._args.get('configuration')):
+        if not self._device.configure(self._args.get('configuration'), self._args.get('tftp_storage')):
             self._device.change_state(SwitchState.CONFIGURE_FAILED)
             self._logger.info('configuration failed')
             return

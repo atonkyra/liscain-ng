@@ -6,6 +6,7 @@ import threading
 import lib.db
 import sqlalchemy.orm
 import tasks
+from pathlib import Path
 from sqlalchemy import and_
 from devices import remap_to_subclass
 from devices.device import Device
@@ -16,6 +17,7 @@ from lib.switchstate import SwitchState
 from lib.option82 import Option82
 from lib.cdp_adopter import CDPAdopter
 from lib.commander import Commander
+from lib.tftp_storage import TFTPStorage
 import zmq
 
 
@@ -34,16 +36,25 @@ commander: Commander = Commander()
 commander.start()
 cdp_adopter: lib.cdp_adopter.CDPAdopter = lib.cdp_adopter.CDPAdopter(commander)
 option82_controller: lib.option82.Option82 = lib.option82.Option82(commander)
+tftp_storage: lib.tftp_storage.TFTPStorage = TFTPStorage()
 
 
 def serve_file(name: str, **kwargs) -> StringIO:
     global commander
     global cdp_adopter
     global option82_controller
+    global tftp_storage
 
     remote_address: str = kwargs['raddress']
     remote_id: str = 'lc-{:02x}'.format(int(ipaddress.ip_address(remote_address)))
-    if name in ['network-confg', 'switch-confg']:
+
+    filepath = Path(name)
+
+    if filepath.parts[0] == 'adopt' and len(filepath.parts) == 2:
+        storage_data = tftp_storage.get(filepath.name)
+        if storage_data is not None:
+            return StringIO(storage_data)
+    elif name in ['network-confg', 'switch-confg']:
         device = None
         with lib.db.sql_ses() as ses:
             try:
@@ -62,9 +73,14 @@ def serve_file(name: str, **kwargs) -> StringIO:
         try:
             task = tasks.DeviceInitializationTask(device)
             if config.get('liscain', 'autoconf_enabled') == 'yes':
-                if config.get('liscain', 'autoconf_mode') == 'cdp':
+                autoconf_mode = None
+                try:
+                    autoconf_mode = config.get('liscain', 'autoconf_mode')
+                except Exception:
+                    logger.error("init/%s: failed to get autoconf_mode (is autoconf_mode set in config?)", remote_id)
+                if autoconf_mode == 'cdp':
                     task.hook(SwitchState.READY, cdp_adopter.autoadopt)
-                if config.get('liscain', 'autoconf_mode') == 'opt82':
+                elif autoconf_mode == 'opt82':
                     task.hook(SwitchState.READY, option82_controller.autoadopt)
             commander.enqueue(device, task)
         except KeyError as e:
@@ -84,6 +100,7 @@ def tftp_server():
 def handle_msg(message):
     global option82_controller
     global cdp_adopter
+    global tftp_storage
 
     cmd = message.get('cmd', None)
     if cmd == 'list':
@@ -157,7 +174,7 @@ def handle_msg(message):
         try:
             commander.enqueue(
                 device,
-                tasks.DeviceConfigurationTask(device, identity=identity, configuration=switch_config)
+                tasks.DeviceConfigurationTask(device, identity=identity, configuration=switch_config, tftp_storage=tftp_storage)
             )
             return {'info': 'ok'}
         except BaseException as e:
