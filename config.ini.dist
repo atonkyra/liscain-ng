@@ -10,8 +10,13 @@ command_socket = tcp://127.0.0.1:1338
 
 autoconf_version_whitelist_prefix = 15.
 
+# uncomment to serve http
+#serve_http = yes
+#http_port = 8080
+#config_source_http = 172.24.2.1:8080
+
 # uncomment with address of the TFTP server to download the configuration from
-# tftp_config_source = 172.24.2.1
+#config_source_tftp = 172.24.2.1
 
 # set to yes to use autoconfiguration, uncomment one option below
 autoconf_enabled = no
