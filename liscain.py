@@ -6,6 +6,7 @@ import threading
 import lib.db
 import sqlalchemy.orm
 import tasks
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from sqlalchemy import and_
 from devices import remap_to_subclass
@@ -17,7 +18,7 @@ from lib.switchstate import SwitchState
 from lib.option82 import Option82
 from lib.cdp_adopter import CDPAdopter
 from lib.commander import Commander
-from lib.tftp_storage import TFTPStorage
+from lib.temp_storage import TempStorage
 import zmq
 
 
@@ -36,22 +37,22 @@ commander: Commander = Commander()
 commander.start()
 cdp_adopter: lib.cdp_adopter.CDPAdopter = lib.cdp_adopter.CDPAdopter(commander)
 option82_controller: lib.option82.Option82 = lib.option82.Option82(commander)
-tftp_storage: lib.tftp_storage.TFTPStorage = TFTPStorage()
+temp_storage: lib.temp_storage.TempStorage = TempStorage()
 
 
 def serve_file(name: str, **kwargs) -> StringIO:
     global commander
     global cdp_adopter
     global option82_controller
-    global tftp_storage
+    global temp_storage
 
     remote_address: str = kwargs['raddress']
     remote_id: str = 'lc-{:02x}'.format(int(ipaddress.ip_address(remote_address)))
 
     filepath = Path(name)
 
-    if filepath.parts[0] == 'adopt' and len(filepath.parts) == 2:
-        storage_data = tftp_storage.get(filepath.name)
+    if len(filepath.parts) == 2 and filepath.parts[0] == 'adopt':
+        storage_data = temp_storage.get(filepath.name)
         if storage_data is not None:
             return StringIO(storage_data)
     elif name in ['network-confg', 'switch-confg']:
@@ -100,7 +101,7 @@ def tftp_server():
 def handle_msg(message):
     global option82_controller
     global cdp_adopter
-    global tftp_storage
+    global temp_storage
 
     cmd = message.get('cmd', None)
     if cmd == 'list':
@@ -174,7 +175,7 @@ def handle_msg(message):
         try:
             commander.enqueue(
                 device,
-                tasks.DeviceConfigurationTask(device, identity=identity, configuration=switch_config, tftp_storage=tftp_storage)
+                tasks.DeviceConfigurationTask(device, identity=identity, configuration=switch_config, temp_storage=temp_storage)
             )
             return {'info': 'ok'}
         except BaseException as e:
@@ -240,12 +241,44 @@ def handle_msg(message):
     return {'error': 'unknown command'}
 
 
+class LiscainHTTPRequestHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        global temp_storage
+
+        filepath = Path(self.path.strip('/'))
+        if len(filepath.parts) == 2 and filepath.parts[0] == 'adopt':
+            storage_data = temp_storage.get(filepath.name)
+            if storage_data is not None:
+                self.send_response(200)
+                self.send_header('Content-type', 'text/plain')
+                self.end_headers()
+                self.wfile.write(storage_data.encode('utf-8'))
+                return
+
+        self.send_response(404)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b'')
+
+
+def http_server_startup():
+    server_address = ('', config.getint("liscain", "http_port"))
+    httpd = ThreadingHTTPServer(server_address, LiscainHTTPRequestHandler)
+    httpd.serve_forever()
+
+
 def main():
     global option82_controller
 
     lib.db.initialize(config.get('liscain', 'database'))
     tftp_task: threading.Thread = threading.Thread(target=tftp_server, daemon=True)
     tftp_task.start()
+
+    http_task = None
+    if config.getboolean("liscain", "serve_http", fallback=False):
+        http_task: threading.Thread = threading.Thread(target=http_server_startup, daemon=True)
+        http_task.start()
+
     zmq_context: zmq.Context = zmq.Context(10)
     zmq_sock: zmq.socket = zmq_context.socket(zmq.REP)
     zmq_sock.bind(config.get('liscain', 'command_socket'))

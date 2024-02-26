@@ -54,7 +54,7 @@ class Device(lib.db.base):
         self._logger = logging.getLogger('[{}]'.format(self.identifier))
         return True
 
-    def configure(self, _config, _tftp_storage):
+    def configure(self, _config, _temp_storage):
         self._logger.error('called default configure, no-op! setting device to CONFIGURE_FAILED')
         self.change_state(lib.switchstate.SwitchState.CONFIGURE_FAILED)
 

@@ -2,7 +2,7 @@ import uuid
 import threading
 
 
-class TFTPStorage:
+class TempStorage:
     def __init__(self):
         self._data = {}
         self._data_lock = threading.Lock()
