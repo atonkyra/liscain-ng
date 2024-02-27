@@ -11,6 +11,7 @@ import tasks
 from lib.switchstate import SwitchState
 import threading
 from lib.commander import Commander
+from lib.temp_storage import TempStorage
 
 
 class Option82Info(base):
@@ -35,9 +36,10 @@ class Option82Info(base):
 
 
 class Option82:
-    def __init__(self, commander: Commander):
+    def __init__(self, commander: Commander, temp_storage: TempStorage):
         self._logger = logging.getLogger('option82')
         self._commander = commander
+        self._temp_storage = temp_storage
 
     def update_info(self, upstream_switch_mac, upstream_port_info, downstream_switch_mac):
         with sql_ses() as ses:
@@ -178,7 +180,7 @@ class Option82:
         try:
             self._commander.enqueue(
                 device,
-                tasks.DeviceConfigurationTask(device, identity=switch_name, configuration=switch_config),
+                tasks.DeviceConfigurationTask(device, identity=switch_name, configuration=switch_config, temp_storage=self._temp_storage),
             )
         except BaseException as e:
             self._logger.error(e)
