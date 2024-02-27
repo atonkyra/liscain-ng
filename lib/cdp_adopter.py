@@ -10,14 +10,16 @@ import tasks
 from lib.switchstate import SwitchState
 import threading
 from lib.commander import Commander
+from lib.temp_storage import TempStorage
 import re
 import requests
 
 
 class CDPAdopter:
-    def __init__(self, commander: Commander):
+    def __init__(self, commander: Commander, temp_storage: TempStorage):
         self._logger = logging.getLogger('cdp-adopter')
         self._commander = commander
+        self._temp_storage = temp_storage
 
     def _jaspy_lookup(self, device, remote_device, remote_interface):
         self._logger.info(
@@ -115,7 +117,7 @@ class CDPAdopter:
         try:
             self._commander.enqueue(
                 device,
-                tasks.DeviceConfigurationTask(device, identity=switch_name, configuration=switch_config),
+                tasks.DeviceConfigurationTask(device, identity=switch_name, configuration=switch_config, temp_storage=self._temp_storage),
             )
         except BaseException as e:
             self._logger.error(e)

@@ -35,9 +35,11 @@ logging.getLogger('tftpy.TftpStates').setLevel(logging.CRITICAL)
 
 commander: Commander = Commander()
 commander.start()
-cdp_adopter: lib.cdp_adopter.CDPAdopter = lib.cdp_adopter.CDPAdopter(commander)
-option82_controller: lib.option82.Option82 = lib.option82.Option82(commander)
+
 temp_storage: lib.temp_storage.TempStorage = TempStorage()
+
+cdp_adopter: lib.cdp_adopter.CDPAdopter = lib.cdp_adopter.CDPAdopter(commander, temp_storage)
+option82_controller: lib.option82.Option82 = lib.option82.Option82(commander, temp_storage)
 
 
 def serve_file(name: str, **kwargs) -> StringIO:
