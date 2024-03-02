@@ -198,14 +198,14 @@ class CiscoIOS(devices.device.Device):
         pass
 
     def _read_pid(self, telnet_client):
-        data = re.search(r'PID: ([^\s]+)', self._write(telnet_client, 'show inventory'))
+        data = re.search(r'PID: (WS-C[^\s]+)', self._write(telnet_client, 'show inventory'))
         if data is not None:
             self.device_type = data.group(1)
             self._logger.info('type detected as %s', self.device_type)
             self.save()
 
     def _read_version(self, telnet_client):
-        data = re.search(r'Cisco IOS.+Version ([^\s]+), ', self._write(telnet_client, 'show version'))
+        data = re.search(r'Cisco IOS.+Version ([^\s,]+)[, ]', self._write(telnet_client, 'show version'))
         if data is not None:
             self.version = data.group(1)
             self._logger.info('version detected as %s', self.version)
